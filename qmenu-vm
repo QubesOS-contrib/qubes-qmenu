@@ -1,1441 +1,1309 @@
 #!/bin/sh
 
-fmenu_fqubes() (
+dmenu() {
 
- dmenu_fmc="-f -m 0 -nb $theme_0 -nf $theme_1 -sb $theme_1 -sf $theme_0"
+command dmenu -f -nb "$theme_0" -nf "$theme_1" -sb "$qube_label" -sf "$theme_0" "$@"
+}
 
- chosefrom=0
+fmenu_dom0() (
 
- while [ -n "$chosefrom" ]; do
+chosefrom=0
 
-   chosefrom=$(printf "New qube\nGlobal preferences\nLogs" |\
-     dmenu -l 3 -i -p "dom0:" $dmenu_fmc | awk '{print $1}')
+while [ -n "$chosefrom" ]; do
 
-   case $chosefrom in
+	chosefrom=$(printf "New qube\nGlobal preferences\nLogs" |\
+		dmenu -l 3 -i -p "dom0:" | cut -f1 -d\ )
 
-     New)
+	case $chosefrom in
 
-       fqvm_create;;
+		New)
 
-     Global)
+			fqvm_create;;
 
-       fqubes_preferences;;
+		Global)
 
-     Logs)
+			fqubes_prefs;;
 
-       fqvm_logs;;
+		Logs)
 
-     *)
-   esac
- done
+			fq_logs;;
+
+		*)
+	esac
+done
 )
 
-fmenu_fqvm() (
+fmenu_domu() (
 
- get_qube_label
+# Change label colors according to user input.
+qube_label=$(echo "$@" | tr ' ' '\n' |\
+	grep "\--$(qvm-ls --raw-data "$qube" -O LABEL)" | cut -d= -f2)
 
- chosefrom=0
+if [ -z "$qube_label" ]; then qube_label=$theme_1; fi
 
- while [ -n "$chosefrom" ]; do
+chosefrom=0
 
-   chosefrom=$(printf "Applications\nAudio input devices\nBlock devices\nBoot\nBootfrom\nClone\nCommand\nDisk\nFirewall\nKeyboard\nKill\nLogs\nPause\nPCI devices\nPreferences\nReboot\nRemove\nServices\nShutdown\nTags\nUnpause\nUSB devices" |\
-     dmenu -l 22 -i -p "$target_qube:" $dmenu_fmc |\
-     awk '{print $1}')
+while [ -n "$chosefrom" ]; do
 
-   case $chosefrom in
+	chosefrom=$(printf "Applications\nAudio input devices\nBlock devices\nBoot\nBootfrom\nClone\nCommand\nDisk\nFirewall\nKeyboard\nKill\nLogs\nPause\nPCI devices\nPreferences\nReboot\nRemove\nServices\nShutdown\nTags\nUnpause\nUSB devices" |\
+		dmenu -l 22 -i -p "$qube:" | cut -f1 -d\ )
 
-     Applications)
+	case $chosefrom in
 
-       fqvm_applications;;
+		Applications)
 
-     Audio)
+			fqvm_appmenus;;
 
-       fqvm_devices;;
+		Audio)
 
-     Block)
+			fqvm_device;;
 
-       fqvm_devices;;
+		Block)
 
-     Boot)
+			fqvm_device;;
 
-       qvm-start --skip-if-running "$target_qube"&;;
+		Boot)
 
-     Bootfrom)
+			qvm-start --skip-if-running "$qube"&;;
 
-       qubes-vm-boot-from-device "$target_qube";;
+		Bootfrom)
 
-     Clone)
+			qubes-vm-boot-from-device "$qube";;
 
-       fqvm_clone;;
+		Clone)
 
-     Command)
+			fqvm_clone;;
 
-       fqvm_run;;
+		Command)
 
-     Disk)
+			fqvm_run;;
 
-       fqvm_disk;;
+		Disk)
 
-     Firewall)
+			fqvm_volume;;
 
-       fqvm_firewall;;
+		Firewall)
 
-     Keyboard)
+			fqvm_firewall;;
 
-       fqvm_keyboard;;
+		Keyboard)
 
-     Kill)
+			fq_keyboard;;
 
-       answer=$(printf "No\nYes" | dmenu -i -p "Kill $target_qube?" $dmenu_fmc)
+		Kill)
 
-       if [ "$answer" = "Yes" ]; then
+			answer=$(printf "No\nYes" | dmenu -i -p "Kill $qube?")
 
-         qvm-kill "$target_qube"& fi;;
+			if [ "$answer" = "Yes" ]; then qvm-kill "$qube"& fi;;
 
-     Logs)
+		Logs)
 
-       fqvm_logs;;
+			fq_logs;;
 
-     Pause)
+		Pause)
 
-       answer=$(printf "No\nYes" | dmenu -i -p "Pause $target_qube?" $dmenu_fmc)
+			answer=$(printf "No\nYes" | dmenu -i -p "Pause $qube?")
 
-       if [ "$answer" = "Yes" ]; then
+			if [ "$answer" = "Yes" ]; then qvm-pause "$qube"& fi;;
 
-         qvm-pause "$target_qube"& fi;;
+		PCI)
 
-     PCI)
+			fqvm_pci;;
 
-       fqvm_pci;;
+		Preferences)
 
-     Preferences)
+			fqvm_prefs;;
 
-       fqvm_preferences;;
+		Reboot)
 
-     Reboot)
+			answer=$(printf "No\nYes" | dmenu -i -p "Reboot $qube?")
 
-       answer=$(printf "No\nYes" |\
-         dmenu -i -p "Reboot $target_qube?" $dmenu_fmc)
+			if [ "$answer" = "Yes" ]; then
 
-       if [ "$answer" = "Yes" ]; then
+				if qvm-check -q --running "$qube"; then
 
-         if qvm-check --running "$target_qube" > /dev/null 2>&1; then
+					$(qvm-shutdown --wait "$qube" && qvm-start "$qube")&
+				fi
+			fi;;
 
-           $(qvm-shutdown --wait "$target_qube" && qvm-start "$target_qube")&
-         fi
-       fi;;
+		Remove)
 
-     Remove)
+			fqvm_remove;;
 
-       fqvm_remove;;
+		Services)
 
-     Services)
+			fqvm_service;;
 
-       fqvm_service;;
+		Shutdown)
 
-     Shutdown)
+			answer=$(printf "No\nYes" | dmenu -i -p "Shutdown $qube?")
 
-       answer=$(printf "No\nYes" |\
-         dmenu -i -p "Shutdown $target_qube?" $dmenu_fmc)
+			if [ "$answer" = "Yes" ]; then qvm-shutdown "$qube"& fi;;
 
-       if [ "$answer" = "Yes" ]; then
+		Tags)
 
-         qvm-shutdown "$target_qube"& fi;;
+			fqvm_tags;;
 
-     Tags)
+		Unpause)
 
-       fqvm_tags;;
+			qvm-unpause "$qube"&;;
 
-     Unpause)
+		USB)
 
-       qvm-unpause "$target_qube"&;;
+			fqvm_device;;
 
-     USB)
-
-       fqvm_devices;;
-
-     *)
-   esac
- done
+		*)
+	esac
+done
 )
 
-fqubes_preferences() (
+fq_keyboard() (
 
- property=0
+# 'qmenu-vm' does not get informed about the available layouts by the vm itself
+# so it is possible that the selected layout is missing inside the vm.
+# Getting the info from the vm itself, however, would have security
+# implications so we will not switch to use that method.
+if LAYOUT=$(ls /usr/share/X11/xkb/symbols | dmenu -l 50 -p "$qube:"); then
 
- while [ -n "$property" ]; do
+	if test -d /usr/share/X11/xkb/symbols/"$LAYOUT"; then
 
-   property=$(qubes-prefs |\
-     dmenu -l 16 -p "Global preferences:" $dmenu_fmc |\
-     awk '{print $1}')
+		LAYOUT="$LAYOUT/"$(ls /usr/share/X11/xkb/symbols/"$LAYOUT" |\
+			dmenu -l 50 -p "$qube:")
+	fi
 
-   case $property in
+	if ! qvm-run "$qube" "setxkbmap $LAYOUT"; then
 
-     check_updates_vm)
-
-       value_selected=$(printf "False\nTrue" |\
-         dmenu -i -p "Should the system periodically check for domU updates?"\
-         $dmenu_fmc);;
-
-     clockvm)
-
-       # List netvms via 'qvm-ls'.
-       value_selected=$(printf "$(qvm-ls --raw-data --fields NAME,FLAGS |\
-         grep '|...N....$' | cut -d '|' -f1)" |\
-         dmenu -l 50 -p "Select new ClockVM" $dmenu_fmc);;
-
-     default_dispvm)
-
-       if [ -n "$LIST_OF_DISPTEMP" ]; then unset LIST_OF_DISPTEMP; fi
-
-       # [mediocre] Look up disposable templates.
-       for n in $(qvm-ls --raw-data -O NAME,FLAGS |\
-         grep '|a.......$' | cut -d '|' -f1); do
-
-         if qvm-prefs --get "$n" template_for_dispvms |\
-           grep True > /dev/null 2>&1; then
-
-           LIST_OF_DISPTEMP="$LIST_OF_DISPTEMP\n$n"
-         fi
-       done
-
-       value_selected=$(printf "(None)$LIST_OF_DISPTEMP" |\
-         dmenu -l 50 -p "Select default dispvm"\
-         $dmenu_fmc)
-
-       if [ "$value_selected" = "(None)" ]; then
-
-         value_selected="none"
-       fi;;
-
-     default_kernel)
-
-       value_selected=$(true |\
-         dmenu -p "Enter the kernel that is to be used as default"\
-         $dmenu_fmc)
-
-       if [ -n "$value_selected" ]; then
-
-         answer_selected=$(printf "No\nYes" |\
-           dmenu -i -p "Set default kernel to $value_selected?"\
-           $dmenu_fmc)
-
-         if [ "$answer_selected" != "Yes" ]; then
-
-           unset $value_selected
-         fi
-       fi;;
-
-     default_netvm)
-
-       # List netvms via 'qvm-ls'.
-       value_selected=$(printf "$(qvm-ls --raw-data --fields NAME,FLAGS |\
-         grep '|...N....$' | cut -d '|' -f1)" |\
-         dmenu -l 50 -p "Select default netvm" $dmenu_fmc);;
-
-     default_pool)
-
-       value_selected=$(qvm-pool --list | sed '1d' |\
-         dmenu -i -l 30 -p "Select default storage pool" \
-         $dmenu_fmc | awk '{print $1}');;
-
-     default_pool_kernel)
-
-       value_selected=$(qvm-pool --list | sed '1d' |\
-         dmenu -i -l 30 -p "Select default storage pool for kernel volumes" \
-         $dmenu_fmc | awk '{print $1}');;
-
-     default_pool_private)
-
-       value_selected=$(qvm-pool --list | sed '1d' |\
-         dmenu -i -l 30 -p "Select default storage pool for private volumes" \
-         $dmenu_fmc | awk '{print $1}');;
-
-     default_pool_root)
-
-       value_selected=$(qvm-pool --list | sed '1d' |\
-         dmenu -i -l 30 -p "Select default storage pool for root volumes" \
-         $dmenu_fmc | awk '{print $1}');;
-
-     default_pool_volatile)
-
-       value_selected=$(qvm-pool --list | sed '1d' |\
-         dmenu -i -l 30 -p "Select default storage pool for volatile volumes" \
-         $dmenu_fmc | awk '{print $1}');;
-
-     default_qrexec_timeout)
-
-       value_selected=$(qubes-prefs --get default_qrexec_timeout |\
-         dmenu -p "Enter the time in seconds, after which qrexec connection attempts are deemed a failure"\
-         $dmenu_fmc);;
-
-     default_shutdown_timeout)
-
-       value_selected=$(qubes-prefs --get default_shutdown_timeout |\
-         dmenu -p "Enter the default time in seconds for vm shutdowns to complete"\
-         $dmenu_fmc);;
-
-     default_template)
-
-       # List templatevm's via 'qvm-ls'.
-       value_selected=$(qvm-ls --raw-data --fields NAME,FLAGS |\
-         grep '|t.......$' | cut -d '|' -f1 |\
-         dmenu -l 50 -p "Select default template for" $dmenu_fmc);;
-
-     management_dispvm)
-
-       if [ -n "$LIST_OF_DISPTEMP" ]; then unset LIST_OF_DISPTEMP; fi
-
-         # [mediocre] Look up disposable templates.
-         for n in $(qvm-ls --raw-data -O NAME,FLAGS |\
-           grep '|a.......$' | cut -d '|' -f1); do
-
-           if qvm-prefs --get "$n" template_for_dispvms |\
-             grep True > /dev/null 2>&1; then
-
-             if [ -z "$LIST_OF_DISPTEMP" ]
-
-               then LIST_OF_DISPTEMP=$n
-
-               else LIST_OF_DISPTEMP="$LIST_OF_DISPTEMP\n$n"
-             fi
-           fi
-         done
-
-         value_selected=$(printf "$LIST_OF_DISPTEMP" |\
-           dmenu -l 50 -p "Select management dispvm"\
-           $dmenu_fmc);;
-
-     stats_interval)
-
-       value_selected=$(true |\
-         dmenu -p "Enter interval in seconds for VM stats reporting" $dmenu_fmc);;
-
-     updatevm)
-
-       # List netvms via 'qvm-ls'.
-       value_selected=$(printf "$(qvm-ls --raw-data --fields NAME,FLAGS |\
-         grep '|...N....$' | cut -d '|' -f1)" |\
-         dmenu -l 50 -p "Select new UpdateVM" $dmenu_fmc)
-
-       if [ -n "$value_selected" ]; then
-
-         if ! qvm-check --running "$value_selected" > /dev/null 2>&1; then
-
-           unset value_selected
-
-           echo "Go back..." |\
-             dmenu -p "$value_selected needs to be running!"\
-             $dmenu_fmc > /dev/null 2>&1
-         fi
-       fi;;
-
-     *)
-   esac
-
-   if [ -n "$value_selected" ]; then
-
-     if ! qubes-prefs --set "$property" "$value_selected"; then
-
-       echo "Go back..." |\
-         dmenu -p "Error: Could not set $property to '$value_selected'!"\
-         $dmenu_fmc > /dev/null 2>&1
-     fi
-   fi
- done
+		echo "Go back..." | dmenu\
+			-p "Error: Could not set keyboard layout to '$LAYOUT' in $qube! Please check the available layouts inside the qube itself."\
+			> /dev/null 2>&1
+	fi
+fi
 )
 
-fqvm_applications() (
+fq_logs() (
 
- option=0
+if [ "$qube" = "dom0" ]; then
 
- while [ -n "$option" ]; do
+	logs="/var/log/xen/console/hypervisor.log"
+else
 
-   option=$(printf "Available\nSelected" |\
-     dmenu -i -l 2 -p "$target_qube:" $dmenu_fmc)
+	logs="/var/log/xen/console/guest-$qube.log\n/var/log/qubes/guid.$qube.log\n/var/log/qubes/qrexec.$qube.log"
+fi
 
-   if [ "$option" = "Available" ]; then
+entry=0
 
-     applications=0
+while [ -n "$entry" ]; do
 
-     while [ -n "$applications" ]; do
+	if entry=$(printf "$logs" | dmenu -i -l 3 -p "$qube:"); then
 
-       # Only show applications that arent already selected for $target_qube via 'grep -v'.
-       applications=$(qvm-appmenus --get-available --i-understand-format-is-unstable "$target_qube" |\
-         grep -vw "$(qvm-appmenus --get-whitelist --i-understand-format-is-unstable "$target_qube")" |\
-         dmenu -l 50 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
+		if log=$(dmenu -l 20 -p "$qube:" < "$entry"); then
 
-       if [ -n "$applications" ]; then
+			echo "$log" > /var/run/qubes/qubes-clipboard.bin
 
-         # Check validity of input.
-         if qvm-appmenus --get-available --i-understand-format-is-unstable "$target_qube" |\
-           awk '{print $1}' | grep -w "$applications" > /dev/null 2>&1; then
+			printf "dom0" > /var/run/qubes/qubes-clipboard.bin.source
+		fi
+	fi
+done
+)
 
-           printf "\n$applications" >> "$HOME"/.local/share/qubes-appmenus/"$target_qube"/whitelisted-appmenus.list
+fqubes_prefs() (
 
-           applications_modified=1
-         fi
-       fi
-     done
+property=0
 
-   elif [ "$option" = "Selected" ]; then
+while [ -n "$property" ]; do
 
-     applications=0
+	property=$(qubes-prefs |\
+		dmenu -l 16 -p "Global preferences:" | cut -f1 -d\ )
 
-     while [ -n "$applications" ]; do
+	case $property in
 
-       # Show complete application and .desktop names via 'grep'.
-       applications=$(qvm-appmenus --get-available --i-understand-format-is-unstable "$target_qube" |\
-         grep -w "$(qvm-appmenus --get-whitelist --i-understand-format-is-unstable "$target_qube")" |\
-         dmenu -l 50 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
+		check_updates_vm)
 
-       if [ -n "$applications" ]; then
+			value_selected=$(printf "False\nTrue" |\
+				dmenu -i -p "Should the system periodically check for domU updates?");;
 
-         for application in $applications; do
+		clockvm)
 
-           # Look up linenumber above $application in
-           # /whitelisted-appmenus.list and delete whitespace.
-           whitespace=$(grep -B1 -wn "$application" <\
-             "$HOME"/.local/share/qubes-appmenus/"$target_qube"/whitelisted-appmenus.list |\
-             cut -c 1 | sed 2d)
+			# List netvms via 'qvm-ls'.
+			value_selected=$(printf "(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+				grep '|...N....$' | cut -d '|' -f1)" |\
+				dmenu -l 50 -p "Select ClockVM:");;
 
-           sed -i "${whitespace}{/^$/d;}" "$HOME"/.local/share/qubes-appmenus/"$target_qube"/whitelisted-appmenus.list
-           sed -i "/$application/d" "$HOME"/.local/share/qubes-appmenus/"$target_qube"/whitelisted-appmenus.list
+		default_dispvm)
 
-           applications_modified=1
-         done
-       fi
-     done
-   fi
+			get_list_of_disptemp
 
-   # Only update qvm-appmenus down here, *after* the user
-   # has quit the application selection.
-   if [ -n "$applications_modified" ]; then
+			value_selected=$(printf "(None)$LIST_OF_DISPTEMP" |\
+				dmenu -l 50 -p "Select default dispvm:");;
 
-     qvm-appmenus --update "$target_qube" > /dev/null 2>&1
+		default_kernel)
 
-     unset applications_modified
-   fi
- done
+			if value_selected=$(: | dmenu -p "Enter default kernel:"); then
+
+				answer_selected=$(printf "No\nYes" |\
+					dmenu -i -p "Set default kernel to $value_selected?")
+
+				if [ "$answer_selected" != "Yes" ]; then
+
+					unset value_selected
+				fi
+			fi;;
+
+		default_netvm)
+
+			# List netvms via 'qvm-ls'.
+			value_selected=$(printf "(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+				grep '|...N....$' | cut -d '|' -f1)" |\
+				dmenu -l 50 -p "Select default netvm:");;
+
+		default_pool)
+
+			value_selected=$(qvm-pool --list | sed '1d' |\
+				dmenu -i -l 30 -p "Select default storage pool:" | cut -f1 -d\ );;
+
+		default_pool_kernel)
+
+			value_selected=$(qvm-pool --list | sed '1d' |\
+				dmenu -i -l 30 -p "Select default storage pool for kernel volumes:"\
+				| cut -f1 -d\ );;
+
+		default_pool_private)
+
+			value_selected=$(qvm-pool --list | sed '1d' |\
+				dmenu -i -l 30 -p "Select default storage pool for private volumes:"\
+				| cut -f1 -d\ );;
+
+		default_pool_root)
+
+			value_selected=$(qvm-pool --list | sed '1d' |\
+				dmenu -i -l 30 -p "Select default storage pool for root volumes:"\
+				| cut -f1 -d\ );;
+
+		default_pool_volatile)
+
+			value_selected=$(qvm-pool --list | sed '1d' |\
+				dmenu -i -l 30 -p "Select default storage pool for volatile volumes:"\
+				| cut -f1 -d\ );;
+
+		default_qrexec_timeout)
+
+			value_selected=$(qubes-prefs default_qrexec_timeout | dmenu\
+				-p "Enter the time in seconds, after which qrexec connection attempts are deemed a failure:");;
+
+		default_shutdown_timeout)
+
+			value_selected=$(qubes-prefs default_shutdown_timeout | dmenu\
+				-p "Enter the default time in seconds for vm shutdowns to complete:");;
+
+		default_template)
+
+			# List templatevms via 'qvm-ls'.
+			value_selected=$(printf "(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+				grep '|t.......$' | cut -d '|' -f1)" |\
+				dmenu -l 50 -p "Select default template:");;
+
+		management_dispvm)
+
+			get_list_of_disptemp
+
+			value_selected=$(printf "(None)$LIST_OF_DISPTEMP" |\
+				dmenu -l 50 -p "Select management dispvm:");;
+
+		stats_interval)
+
+			value_selected=$(: |\
+				dmenu -p "Enter interval in seconds for VM stats reporting:");;
+
+		updatevm)
+
+			# List netvms via 'qvm-ls'.
+			value_selected=$(printf "(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+				grep '|...N....$' | cut -d '|' -f1)" |\
+				dmenu -l 50 -p "Select UpdateVM:")
+
+			if [ -n "$value_selected" ] && [ "$value_selected" != "(None)" ]; then
+
+				if ! qvm-check -q --running "$value_selected"; then
+
+					echo "Go back..." |\
+						dmenu -p "$value_selected needs to be running!" > /dev/null 2>&1
+
+					unset value_selected
+				fi
+			fi;;
+
+		*)
+	esac
+
+	if [ -n "$value_selected" ]; then
+
+		if [ "$value_selected" = "(None)" ]; then value_selected=''; fi
+
+		if ! qubes-prefs "$property" "$value_selected"; then
+
+			echo "Go back..." |\
+				dmenu -p "Error: Could not set $property to '$value_selected'!"\
+				> /dev/null 2>&1
+		fi
+
+		unset value_selected
+	fi
+done
+)
+
+fqvm_appmenus() (
+
+option=0
+
+while [ -n "$option" ]; do
+
+	option=$(printf "Available\nSelected" | dmenu -i -l 2 -p "$qube:")
+
+	if [ "$option" = "Available" ]; then
+
+		applications=0
+
+		while [ -n "$applications" ]; do
+
+			# Only show applications that arent already selected for $qube via 'grep -v'.
+			applications=$(qvm-appmenus --get-available --i-understand-format-is-unstable "$qube" |\
+				grep -v "$(qvm-appmenus --get-whitelist --i-understand-format-is-unstable "$qube")" |\
+				dmenu -l 50 -p "$qube:" | cut -f1 -d\ )
+
+			if [ -n "$applications" ]; then
+
+				# Check validity of input.
+				if qvm-appmenus --get-available --i-understand-format-is-unstable "$qube" |\
+					cut -f1 -d\  | grep -q "^$applications$"; then
+
+					printf "\n$applications" >> "$HOME"/.local/share/qubes-appmenus/"$qube"/whitelisted-appmenus.list
+
+					applications_modified=1
+				fi
+			fi
+		done
+
+	elif [ "$option" = "Selected" ]; then
+
+		applications=0
+
+		while [ -n "$applications" ]; do
+
+			# Show complete application and .desktop names via 'grep'.
+			applications=$(qvm-appmenus --get-available --i-understand-format-is-unstable "$qube" |\
+				grep "$(qvm-appmenus --get-whitelist --i-understand-format-is-unstable "$qube")" |\
+				dmenu -l 50 -p "$qube:"  | cut -f1 -d\ )
+
+			if [ -n "$applications" ]; then
+
+				for application in $applications; do
+
+					# Look up linenumber above $application in
+					# /whitelisted-appmenus.list to delete if whitespace.
+					whitespace=$(grep -n1 "^$application$" <\
+						"$HOME"/.local/share/qubes-appmenus/"$qube"/whitelisted-appmenus.list |\
+						sed '1q;d' | cut -d- -f1)
+
+					sed -i "${whitespace}{/^$/d;}" "$HOME"/.local/share/qubes-appmenus/"$qube"/whitelisted-appmenus.list
+					sed -i "/$application/d" "$HOME"/.local/share/qubes-appmenus/"$qube"/whitelisted-appmenus.list
+
+					applications_modified=1
+				done
+			fi
+		done
+	fi
+
+	# Only update qvm-appmenus down here, *after* the user
+	# has quit the application selection.
+	if [ -n "$applications_modified" ]; then
+
+		qvm-appmenus -q --update "$qube"
+
+		unset applications_modified
+	fi
+done
 )
 
 fqvm_clone() (
 
- clone_name=$(true |\
-   dmenu -p "Enter the name for the clone of $target_qube" $dmenu_fmc)
+if clone_name=$(: | dmenu -p "Enter the name for the clone of $qube:"); then
 
- if [ -n "$clone_name" ]; then
+	option=0
 
-   option=0
+	while [ -n "$option" ]; do
 
-   while [ -n "$option" ]; do
+		option=$(printf "Create the clone\nAdvanced options" |\
+			dmenu -i -l 2 -p "$qube:" | cut -f1 -d\ )
 
-     option=$(printf "Create the clone\nAdvanced options" |\
-       dmenu -i -l 2 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
+		if [ "$option" = "Advanced" ]; then
 
-     if [ "$option" = "Advanced" ]; then
+			option_adv=0
 
-       option_adv=0
+			while [ -n "$option_adv" ]; do
 
-       while [ -n "$option_adv" ]; do
+				option_adv=$(printf "Class\nPool" |\
+					dmenu -i -l 2 -p "$clone_name($qube):")
 
-         option_adv=$(printf "Class\nPool" |\
-             dmenu -i -l 2 -p "$clone_name($target_qube):" $dmenu_fmc)
+				if [ "$option_adv" = "Class" ]; then
 
-         if [ "$option_adv" = "Class" ]; then
+					if class=$(printf "AppVM\nDispVM\nStandaloneVM\nTemplateVM" |\
+						dmenu -i -l 4 -p "Choose a class for $clone_name:"); then
 
-           class=$(printf "AppVM\nDispVM\nStandaloneVM\nTemplateVM" |\
-             dmenu -i -l 4 -p "Choose a class for $clone_name" $dmenu_fmc)
+					class="-C $class"
+					fi
 
-           if [ -n "$pool" ]; then class="-C $class"; fi
+				elif [ "$option_adv" = "Pool" ]; then
 
-         elif [ "$option_adv" = "Pool" ]; then
+					if pool=$(qvm-pool --list | sed '1d' | dmenu -i -l 10\
+						-p "Select a pool for $clone_name:" | cut -f1 -d\ ); then
 
-           pool=$(qvm-pool --list | sed '1d' |\
-             dmenu -i -l 10 -p "Select a pool for $clone_name"\
-             $dmenu_fmc | awk '{print $1}')
+					pool="-P $pool"
+					fi
+				fi
+			done
 
-           if [ -n "$pool" ]; then pool="-P $pool"; fi
-         fi
-       done
+		elif [ "$option" = "Create" ]; then
 
-     elif [ "$option" = "Create" ]; then
+			unset option
 
-       unset option
-
-       qvm-clone $class $pool "$target_qube" "$clone_name"&
-     fi
-   done
- fi
+			qvm-clone $class $pool "$qube" "$clone_name"&
+		fi
+	done
+fi
 )
 
 fqvm_create() (
 
- new_name=$(true | dmenu -p "Enter the name of the qube to create:" $dmenu_fmc)
+if name=$(: | dmenu -p "Enter the name of the qube to create:"); then
 
- if [ -n "$new_name" ]; then
+	label=$(printf "Red\nOrange\nYellow\nGreen\nGray\nBlue\nPurple\nBlack" |\
+		dmenu -i -l 8 -p "Select label for $name:" | awk '{print tolower($0)}')
 
-   label=$(printf "Purple\nBlue\nGray\nGreen\nYellow\nOrange\nRed\nBlack" |\
-     dmenu -i -l 8 -p "Select label for $new_name" $dmenu_fmc |\
-     awk '{print tolower($0)}')
+	if [ -n "$label" ]; then
 
-   if [ -n "$label" ]; then
+		QUBEARGS="-l $label"
 
-     QUBEARGS="-l $label"
+		if class=$(printf "AppVM\nDispVM\nStandaloneVM\nTemplateVM" |\
+			dmenu -i -l 4 -p "Choose a class for $name:"); then
 
-     class=$(printf "AppVM\nDispVM\nStandaloneVM\nTemplateVM" |\
-       dmenu -i -l 4 -p "Choose a class for $new_name" $dmenu_fmc)
+			QUBEARGS="$QUBEARGS -C $class"
+		fi
 
-     if [ -n "$class" ]; then
+		# List templatevms via 'qvm-ls'.
+		template=$(printf "(Default)\n(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+			grep '|t.......$' | cut -d '|' -f1)" |\
+			dmenu -l 50 -p "Select template for $name:")
 
-       QUBEARGS="$QUBEARGS -C $class"
-     fi
+		if [ "$template" != "(Default)" ] && [ "$template" != "(None)" ]; then
 
-     # List templatevm's via 'qvm-ls'.
-     template=$(printf "(Default)\n(None)\n$(qvm-ls --raw-data --fields NAME,FLAGS |\
-       grep '|t.......$' | cut -d '|' -f1)" |\
-       dmenu -l 50 -p "Select template for $new_name" $dmenu_fmc)
+			QUBEARGS="$QUBEARGS -t $template"
+		fi
 
-     if [ "$template" != "(Default)" ] && [ "$template" != "(None)" ]; then
+		netvm=$(printf "(Default)\n(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+			grep '|...N....$' | cut -d '|' -f1)" |\
+			dmenu -l 50 -p "Select netvm for $name:")
 
-       QUBEARGS="$QUBEARGS -t $template"
-     fi
+		if [ "$netvm" != "(Default)" ]; then
 
-     netvm=$(printf "(Default)\n(None)\n$(qvm-ls --raw-data --fields NAME,FLAGS |\
-       grep '|...N....$' | cut -d '|' -f1)" |\
-       dmenu -l 50 -p "Select netvm for $new_name" $dmenu_fmc)
+			if [ "$netvm" = "(None)" ]; then unset netvm; fi
 
-     if [ "$netvm" != "(Default)" ]; then
+			QUBEARGS="$QUBEARGS --prop netvm=$netvm"
+		fi
 
-       if [ "$netvm" = "(None)" ]; then unset netvm; fi
+		provides_network=$(printf "No\nYes" |\
+			dmenu -i -p "Should $name provide networking for other qubes?")
 
-       QUBEARGS="$QUBEARGS --prop netvm=$netvm"
-     fi
+		if [ "$provides_network" = "Yes" ]; then
 
-     provides_network=$(printf "No\nYes" |\
-       dmenu -i -p "Should $new_name provide networking for other qubes?" $dmenu_fmc)
+			QUBEARGS="$QUBEARGS --prop provides_network=true"
+		fi
 
-     if [ "$provides_network" = "Yes" ]; then
+		option=0
 
-       QUBEARGS="$QUBEARGS --prop provides_network=true"
-     fi
+		while [ -n "$option" ]; do
 
-     option=0
+			option=$(printf "Create the new qube\nAdvanced options" |\
+				dmenu -i -l 2 -p "dom0:" | cut -f1 -d\ )
 
-     while [ -n "$option" ]; do
+			if [ "$option" = "Advanced" ]; then
 
-       option=$(printf "Create the new qube\nAdvanced options" |\
-         dmenu -i -l 2 -p "dom0:" $dmenu_fmc | awk '{print $1}')
+				option_adv=$(printf "Pool" | dmenu -l 1 -p "$name:")
 
-       if [ "$option" = "Advanced" ]; then
+				if [ "$option_adv" = "Pool" ]; then
 
-         option_adv=$(printf "Pool" | dmenu -l 1 -p "$new_name:" $dmenu_fmc)
+					pool=$(qvm-pool --list | sed '1d' |\
+						dmenu -i -l 10 -p "Select a pool for $name:" | cut -f1 -d\ )
 
-         if [ "$option_adv" = "Pool" ]; then
+					if [ -n "$pool" ]; then pool="-P $pool"; fi
+				fi
 
-           pool=$(qvm-pool --list | sed '1d' |\
-             dmenu -i -l 10 -p "Select a pool for $new_name" $dmenu_fmc |\
-             awk '{print $1}')
+			elif [ "$option" = "Create" ]; then
 
-           if [ -n "$pool" ]; then pool="-P $pool"; fi
-         fi
+				qvm-create $QUBEARGS $pool "$name"&
 
-       elif [ "$option" = "Create" ]; then
-
-         qvm-create $QUBEARGS $pool "$new_name"&
-
-         unset option
-       fi
-     done
-   fi
- fi
+				unset option
+			fi
+		done
+	fi
+fi
 )
 
-fqvm_devices() (
+fqvm_device() (
 
- if ! qvm-check --running "$target_qube" > /dev/null 2>&1; then
+if ! qvm-check -q --running "$qube"; then
 
-   echo "Go back..." |\
-     dmenu -p "$target_qube needs to be running, in order to attach devices to it"\
-     $dmenu_fmc > /dev/null 2>&1
- else
+	echo "Go back..." |\
+		dmenu -p "$qube needs to be running, in order to attach devices to it."\
+		> /dev/null 2>&1
+else
 
-   # Depending on the device type, we have to 
-   # 'awk' different fields later on.
-   if [ "$chosefrom" = "Audio" ]; then
+	case $chosefrom in
 
-     device_type="device mic"
+		Audio) device_type="device mic";;
 
-     awk_devicename0=2
-     awk_devicename1=10
-     awk_targetqube=3
+		Block) device_type="block";;
 
-   elif [ "$chosefrom" = "Block" ]; then
+		USB) device_type="usb"
+	esac
 
-     device_type="block"
+	devices_list=$(qvm-$device_type)
 
-     awk_devicename0=2
-     awk_devicename1=3
-     awk_targetqube=4
+	device=0
 
-   elif [ "$chosefrom" = "USB" ]; then
+	while [ -n "$device" ]; do
 
-     device_type="usb"
+		device=$(echo "$devices_list" | dmenu -l 16 -p "$qube:")
 
-     awk_devicename0=2
-     awk_devicename1=10
-     awk_targetqube=3
-   fi
+		if [ -n "$device" ] && [ "$(echo "$device" | wc -l)" -eq 1 ]; then
 
-   devices_list=$(qvm-$device_type)
+			device_id=$(echo "$device" | cut -f1 -d\ )
 
-   device=0
+			if [ "$device_type" = "block" ]; then
 
-   while [ -n "$device" ]; do
+				device_name=$(echo "$device" | awk '{print $2,$3}')
+				holds_qube=$(echo "$device" | awk '{print $4}')
+			else
 
-     device=$(echo "$devices_list" |\
-       dmenu -l 16 -p "$target_qube:" $dmenu_fmc)
+				device_name=$(echo "$device" | awk '{print $2}')
+				holds_qube=$(echo "$device" | awk '{print $3}')
+			fi
 
-     device_id=$(echo "$device" | awk '{print $1}')
+			if [ -z "$holds_qube" ]; then
 
-     device_name=$(echo "$device" |\
-       awk '{print $'$awk_devicename0'$'$awk_devicename1'}')
+				answer=$(printf "No\nYes" |\
+					dmenu -i -p "Attach '$device_name' to $qube?")
 
-     if [ -n "$device" ]; then
+				if [ "$answer" = "Yes" ]; then
 
-       holds_qube=$(echo "$devices_list" | grep "$device_id" |\
-         awk '{print $'$awk_targetqube'}')
+					unset device
 
-       if [ -z "$holds_qube" ]; then
+					if ! qvm-$device_type attach -q "$qube" "$device_id"; then
 
-         answer=$(printf "No\nYes" |\
-           dmenu -i -p "Attach $device_name to $target_qube?"\
-           $dmenu_fmc)
+						echo "Go back..." | dmenu -p "Error: Could not attach device!"\
+							> /dev/null 2>&1
+					fi
+				fi
 
-         if [ "$answer" = "Yes" ]; then
+			elif [ "$holds_qube" = "$qube" ]; then
 
-           unset device
+				answer=$(printf "No\nYes" |\
+					dmenu -i -p "Detach '$device_name' from $qube?")
 
-           qvm-$device_type attach "$target_qube" "$device_id"&
-         fi
+				if [ "$answer" = "Yes" ]; then
 
-       elif [ "$holds_qube" = "$target_qube" ]; then
+					unset device
 
-         answer=$(printf "No\nYes" |\
-           dmenu -i -p "Detach $device_name from $target_qube?"\
-           $dmenu_fmc)
+					if ! qvm-$device_type detach -q "$holds_qube" "$device_id"; then
 
-         if [ "$answer" = "Yes" ]; then
+						echo "Go back..." | dmenu -p "Error: Could not detach device!"\
+							> /dev/null 2>&1
+					fi
+				fi
+			else
 
-           unset device
+				answer=$(printf "No\nYes" | dmenu -i\
+					-p "Detach '$device_name' from $holds_qube and attach it to $qube?")
 
-           qvm-$device_type detach "$holds_qube" "$device_id"&
-         fi
-       else
+				if [ "$answer" = "Yes" ]; then
 
-         answer=$(printf "No\nYes" |\
-           dmenu -i -p "Detach $device_name from $holds_qube and attach it to $target_qube?"\
-           $dmenu_fmc)
+					unset device
 
-         if [ "$answer" = "Yes" ]; then
+					if qvm-$device_type detach -q "$holds_qube" "$device_id"; then
 
-           unset device
+						if ! qvm-$device_type attach -q "$qube" "$device_id"; then
 
-           $(qvm-$device_type detach "$holds_qube" "$device_id" &&
-             qvm-$device_type attach "$target_qube" "$device_id")&
-         fi
-       fi
-     fi
-   done
- fi
-)
-
-fqvm_disk() (
-
- qube_class=$(qvm-ls --raw-data -O flags "$target_qube" | cut -c 1)
-
- # If $target_qube is template or standalone, give option to extend root storage.
- if [ "$qube_class" = "t" ] ||\
-   [ "$qube_class" = "s" ] ||\
-   [ "$qube_class" = "S" ]; then
-
-   volume=$(printf "Root\nPrivate" |\
-     dmenu -l 2 -i -p "$target_qube:" $dmenu_fmc | awk '{print tolower($0)}')
-
- else
-
-   volume="private"
- fi
-
- if [ -n "$volume" ]; then
-
-   current_storage=$(( $(qvm-volume info "$target_qube:$volume" size) / 1024/1024 ))
-
-   mebibyte=$(echo "$current_storage" |\
-     dmenu -p "Enter the maximum size of $volume storage in MiB to be allocated to $target_qube"\
-     $dmenu_fmc)
-
-   if [ -n "$mebibyte" ]; then
-
-     if [ "$mebibyte" -gt "$current_storage" ]; then
-
-       byte=$(( mebibyte * 1024*1024 ))
-
-       answer=$(printf "No\nYes" |\
-         dmenu -i -p "Increase the maximum $volume storage size of $target_qube from $current_storage MiB to $mebibyte MiB?"\
-         $dmenu_fmc)
-
-       if [ "$answer" = "Yes" ]; then
-
-         qvm-volume extend "$target_qube:$volume" "$byte"&
-       fi
-     else
-
-       echo "Go back..." |\
-         dmenu -p "Error: Can not decrease the maximum $volume storage!"\
-         $dmenu_fmc > /dev/null 2>&1
-     fi
-   fi
- fi
+							echo "Go back..." | dmenu\
+								-p "Error: Could not attach device!" > /dev/null 2>&1
+						fi
+					fi
+				fi
+			fi
+		fi
+	done
+fi
 )
 
 fqvm_firewall() (
 
- rulenumber_selected=0
+rulenumber_selected=0
 
- while [ -n "$rulenumber_selected" ]; do
+while [ -n "$rulenumber_selected" ]; do
 
-   rulenumber_selected=$(qvm-firewall $target_qube list |\
-     dmenu -l 50 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
+	rulenumber_selected=$(qvm-firewall $qube list |\
+		dmenu -l 50 -p "$qube:" | cut -f1 -d\ )
 
-   if [ -n "$rulenumber_selected" ]; then
+	if [ "$(echo "$rulenumber_selected" | wc -w)" -eq 1 ]; then
 
-     # This will equal "NO" if the user selects the top row,
-     # instead of any existing rule.
-     if [ "$rulenumber_selected" != "NO" ]; then
+		# This will equal "NO" if the user selects the top row,
+		# instead of any existing rule.
+		if [ "$rulenumber_selected" != "NO" ]; then
 
-       option=$(printf "Add new rule above rule $rulenumber_selected\nRemove rule $rulenumber_selected" |\
-         dmenu -i -l 2 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
-     else
+			option=$(printf "Add new rule above rule $rulenumber_selected\nRemove rule $rulenumber_selected" |\
+				dmenu -i -l 2 -p "$qube:" | cut -f1 -d\ )
+		else
 
-       option="Add"
-     fi
+			option="Add"
+		fi
 
-     if [ "$option" = "Remove" ]; then
+		if [ "$option" = "Remove" ]; then
 
-       answer=$(printf "No\nYes" |\
-         dmenu -i -p "Remove rule $rulenumber_selected?" $dmenu_fmc)
+			answer=$(printf "No\nYes" |\
+				dmenu -i -p "Remove rule $rulenumber_selected?")
 
-       if [ "$answer" = "Yes" ]; then
+			if [ "$answer" = "Yes" ]; then
 
-         qvm-firewall "$target_qube" del --rule-no "$rulenumber_selected"
-       fi
+				qvm-firewall "$qube" del --rule-no "$rulenumber_selected"
+			fi
 
-     elif [ "$option" = "Add" ]; then
+		elif [ "$option" = "Add" ]; then
 
-       if [ -n "$RULEARGS" ]; then unset RULEARGS; fi
+			if [ -n "$RULEARGS" ]; then unset RULEARGS; fi
 
-       action=$(printf "Accept\nDrop" |\
-         dmenu -i -l 2 -p "Select action for the new firewall rule" $dmenu_fmc |\
-         awk '{print tolower($0)}')
+			action=$(printf "Accept\nDrop" |\
+				dmenu -i -l 2 -p "Select action for the new firewall rule:" |\
+				awk '{print tolower($0)}')
 
-       if [ -n "$action" ]; then
+			if [ -n "$action" ]; then
 
-         RULEARGS="$action"
+				RULEARGS="$action"
 
-         specialtarget=$(true |\
-           dmenu -p "ACTION=$RULEARGS <specialtarget>" $dmenu_fmc)
+				if specialtarget=$(: | dmenu -p "ACTION=$RULEARGS <specialtarget>"); then
 
-         if [ -n "$specialtarget" ]; then
+					RULEARGS="$RULEARGS SPECIALTARGET=$specialtarget"
+				fi
 
-           RULEARGS="$RULEARGS SPECIALTARGET=$specialtarget"
-         fi
+				if dsthost=$(: | dmenu -p "ACTION=$RULEARGS <dsthost>"); then
 
-         dsthost=$(true |\
-           dmenu -p "ACTION=$RULEARGS <dsthost>" $dmenu_fmc)
+					RULEARGS="$RULEARGS DSTHOST=$dsthost"
+				fi
 
-         if [ -n "$dsthost" ]; then
+				if proto=$(: | dmenu -p "ACTION=$RULEARGS <proto>"); then
 
-           RULEARGS="$RULEARGS DSTHOST=$dsthost"
-         fi
+					RULEARGS="$RULEARGS PROTO=$proto"
+				fi
 
-         proto=$(true |\
-           dmenu -p "ACTION=$RULEARGS <proto>" $dmenu_fmc)
+				if [ "$proto" = "tcp" ] || [ "$proto" = "udp" ]; then
 
-         if [ -n "$proto" ]; then
+					if dstports=$(: | dmenu -p "ACTION=$RULEARGS <dstports>"); then
 
-           RULEARGS="$RULEARGS PROTO=$proto"
-         fi
+						RULEARGS="$RULEARGS DSTPORTS=$dstports"
+					fi
 
-         if [ "$proto" = "tcp" ] || [ "$proto" = "udp" ]; then
+				elif [ "$proto" = "icmp" ]; then
 
-           dstports=$(true |\
-             dmenu -p "ACTION=$RULEARGS <dstports>" $dmenu_fmc)
+					if icmptype=$(: | dmenu -p "ACTION=$RULEARGS <icmptype>"); then
 
-           if [ -n "$dstports" ]; then
+						RULEARGS="$RULEARGS ICMPTYPE=$icmptype"
+					fi
+				fi
 
-             RULEARGS="$RULEARGS DSTPORTS=$dstports"
-           fi
+				if expire=$(: | dmenu -p "ACTION=$RULEARGS <expire>"); then
 
-         elif [ "$proto" = "icmp" ]; then
+					RULEARGS="EXPIRE=$expire"
+				fi
 
-           icmptype=$(true |\
-             dmenu -p "ACTION=$RULEARGS <icmptype>" $dmenu_fmc)
+				if comment=$(: | dmenu -p "ACTION=$RULEARGS <comment>"); then
 
-           if [ -n "$icmptype" ]; then
+					RULEARGS="$RULEARGS COMMENT=$comment"
+				fi
 
-             RULEARGS="$RULEARGS ICMPTYPE=$icmptype"
-           fi
-         fi
+				answer=$(printf "No\nYes" | dmenu -i\
+					-p "Add the following rule to $qube? {{ ACTION=$RULEARGS }}")
 
-         expire=$(true |\
-           dmenu -p "ACTION=$RULEARGS <expire>" $dmenu_fmc)
+				if [ "$answer" = "Yes" ]; then
 
-         if [ -n "$expire" ]; then
+					if [ -n "$beforerule" ]; then unset beforerule; fi
 
-           RULEARGS="EXPIRE=$expire"
-         fi
+					if [ "$rulenumber_selected" != "NO" ]; then
 
-         comment=$(true |\
-           dmenu -p "ACTION=$RULEARGS <comment>" $dmenu_fmc)
+						beforerule=$(echo --before "$rulenumber_selected")
+					fi
 
-         if [ -n "$comment" ]; then
+					RULEARGS=$(echo "$RULEARGS" | awk '{print tolower($0)}')
 
-           RULEARGS="$RULEARGS COMMENT=$comment"
-         fi
+					if ! qvm-firewall "$qube" add $beforerule $RULEARGS; then
 
-         answer=$(printf "No\nYes" |\
-           dmenu -i -p "Add the following rule to $target_qube? {{ ACTION=$RULEARGS }}"\
-           $dmenu_fmc)
-
-         if [ "$answer" = "Yes" ]; then
-
-           if [ -n "$beforerule" ]; then unset beforerule; fi
-
-           if [ "$rulenumber_selected" != "NO" ]; then
-
-             beforerule=$(echo --before "$rulenumber_selected")
-           fi
-
-           RULEARGS=$(echo "$RULEARGS" | awk '{print tolower($0)}')
-
-           if ! qvm-firewall "$target_qube" add $beforerule $RULEARGS; then
-
-             echo "Go back..." | dmenu $dmenu_fmc\
-               -p "Error: Failed to add firewall rule! See 'qvm-firewall --help' for more information."\
-               > /dev/null 2>&1
-           fi
-         fi
-       fi
-     fi
-   fi
- done
-)
-
-fqvm_keyboard() (
-
- # 'qmenu-vm' does not get informed about the installed layouts by the vm itself
- # so it is possible that the selected layout is missing inside the vm.
- # Getting the info from the vm itself however would have security implications
- # so we will not switch to use that method.
- LAYOUT=$(ls /usr/share/X11/xkb/symbols |\
-   dmenu -l 50 -p "$target_qube:" $dmenu_fmc)
-
- if [ -n "$LAYOUT" ]; then
-
-   if test -d /usr/share/X11/xkb/symbols/$LAYOUT; then
-
-     LAYOUT="$LAYOUT/"$(ls /usr/share/X11/xkb/symbols/"$LAYOUT" |\
-       dmenu -l 50 -p "$target_qube:" $dmenu_fmc)
-   fi
-
-   if ! qvm-run "$target_qube" "setxkbmap $LAYOUT"; then
-
-     echo "Go back..." |\
-       dmenu -p "Error: Could not set keyboard layout to '$LAYOUT' in $target_qube! Please check the installed layouts inside the qube itself."\
-       $dmenu_fmc > /dev/null 2>&1
-   fi
- fi
-)
-
-fqvm_logs() (
-
- if [ "$target_qube" = "dom0" ]; then
-
-   logs="/var/log/xen/console/hypervisor.log"
- else
-
-   logs="/var/log/xen/console/guest-$target_qube.log\n/var/log/qubes/guid.$target_qube.log\n/var/log/qubes/qrexec.$target_qube.log"
- fi
-
- entry=0
-
- while [ -n "$entry" ]; do
-
-   entry=$(printf "$logs" |\
-     dmenu -i -l 3 -p "$target_qube:" $dmenu_fmc)
-
-   if [ -n "$entry" ]; then
-
-     log=$(dmenu -l 20 -p "$target_qube:" $dmenu_fmc < "$entry")
-
-     if [ -n "$log" ]; then
-
-       echo "$log" > /var/run/qubes/qubes-clipboard.bin
-
-       printf "dom0" > /var/run/qubes/qubes-clipboard.bin.source
-     fi
-   fi
- done
+						echo "Go back..." | dmenu\
+							-p "Error: Failed to add firewall rule! See 'qvm-firewall --help' for more information."\
+							> /dev/null 2>&1
+					fi
+				fi
+			fi
+		fi
+	fi
+done
 )
 
 fqvm_pci() (
 
- if qvm-check --running "$target_qube" > /dev/null 2>&1; then
+if qvm-check -q --running "$qube"; then
 
-   echo "Go back..." |\
-     dmenu -p "$target_qube needs to be powered off, in order to attach or detach PCI devices"\
-     $dmenu_fmc > /dev/null 2>&1
- else
+	echo "Go back..." | dmenu\
+		-p "$qube needs to be powered off, in order to attach or detach PCI devices."\
+		> /dev/null 2>&1
+else
 
-   list_pci=$(qvm-pci)
+	list_pci=$(qvm-pci)
 
-   if ! qvm-prefs --get "$target_qube" maxmem | grep -w 0 > /dev/null 2>&1; then
+	if ! qvm-prefs "$qube" maxmem | grep -q ^0; then
 
-     answer_memorybalancing=$(printf "Continue anyways\nDisable dynamic memory balancing" |\
-       dmenu -l 2 -i -p "Dynamic memory balancing is enabled in $target_qube, some devices might not work!"\
-       $dmenu_fmc | awk '{print $1}')
+		answer_memorybalancing=$(printf "Continue anyways\nDisable dynamic memory balancing" |\
+			dmenu -l 2 -i -p "Dynamic memory balancing is enabled in $qube, some devices might not work!"\
+			| cut -f1 -d\ )
 
-     if [ "$answer_memorybalancing" = "Disable" ]; then
+		if [ "$answer_memorybalancing" = "Disable" ]; then
 
-       qvm-prefs --set "$target_qube" maxmem 0
-     fi
-   fi
+			qvm-prefs "$qube" maxmem 0
+		fi
+	fi
 
-   if qvm-prefs --get "$target_qube" virt_mode |\
-     grep -w pvh > /dev/null 2>&1; then
+	if qvm-prefs "$qube" virt_mode | grep -q pvh; then
 
-     answer_virtmode=$(printf "Continue anyways\nSelect another virtualisation mode" |\
-       dmenu -l 2 -i -p "$target_qube is using PVH for its virtualisation mode, which does not support PCI passthrough!"\
-       $dmenu_fmc | awk '{print $1}')
+		answer_virtmode=$(printf "Continue anyways\nSelect another virtualisation mode" |\
+			dmenu -l 2 -i -p "$qube is using PVH for its virtualisation mode, which does not support PCI passthrough!"\
+			| cut -f1 -d\ )
 
-     if [ "$answer_virtmode" = "Select" ]; then
+		if [ "$answer_virtmode" = "Select" ]; then
 
-       virtmode_selected=$(printf "HVM\nPV" |\
-         dmenu -l 2 -i -p "Select virtualisation mode for $target_qube" $dmenu_fmc)
+			if virtmode_selected=$(printf "HVM\nPV" |\
+				dmenu -l 2 -i -p "Select virtualisation mode for $qube:"); then
 
-       if [ -n "$virtmode_selected" ]; then
+				qvm-prefs "$qube" virt_mode "$virtmode_selected"
+			fi
+		fi
+	fi
 
-         qvm-prefs --set "$target_qube" virt_mode "$virtmode_selected"
-       fi
-     fi
-   fi
+	device=0
 
-   device_selected=0
+	while [ -n "$device" ]; do
 
-   while [ -n "$device_selected" ]; do
+		device=$(echo "$list_pci" | dmenu -l 30 -p "$qube:")
 
-     device_selected=$(echo "$list_pci" |\
-       dmenu -l 30 -p "$target_qube:" $dmenu_fmc)
+		if [ -n "$device" ] && [ "$(echo "$device" | wc -l)" -eq 1 ]; then
 
-     if [ -n "$device_selected" ]; then
+			device_src=$(echo "$device" | cut -f1 -d\ | sed 's/:.*//')
+			device_bdf=$(echo "$device" | cut -f1 -d\ | sed 's/.*://')
 
-       device_src=$(echo "$device_selected" | awk '{print $1}' | sed 's/:.*//')
-       device_bdf=$(echo "$device_selected" | awk '{print $1}' | sed 's/.*://')
+			if echo "$device" |\
+				grep -q " $qube$\\| $qube (no-strict-reset=True)$\\| $qube (permissive=True)$"; then
 
-       if echo "$device_selected" | grep -w "$target_qube"; then
+				answer=$(printf "No\nYes" |\
+					dmenu -i -p "Detach \"$device_bdf\" from $qube?")
 
-         answer=$(printf "No\nYes" |\
-           dmenu -i -p "Detach \"$device_bdf\" from $target_qube?" $dmenu_fmc)
+				if [ "$answer" = "Yes" ]; then
 
-         if [ "$answer" = "Yes" ]; then
+					if ! qvm-pci detach "$qube" "$device_src":"$device_bdf"; then
 
-           if ! test_qvm-pci detach "$target_qube" "$device_src":"$device_bdf"; then
+						echo "Go back..." | dmenu\
+							-p "Error: Failed to detach \"$device_bdf\" from $qube!"\
+							> /dev/null 2>&1
+					fi
 
-             echo "Go back..." |\
-               dmenu -p "Error: Failed to detach \"$device_bdf\" from $target_qube!"\
-               $dmenu_fmc > /dev/null 2>&1
-           fi
+					list_pci=$(qvm-pci)
+				fi
+			else
 
-           list_pci=$(qvm-pci)
-         fi
-       else
+				answer=$(printf "No\nYes" |\
+					dmenu -i -p "Attach \"$device_bdf\" to $qube?")
 
-         answer=$(printf "No\nYes" |\
-           dmenu -i -p "Attach \"$device_bdf\" to $target_qube?" $dmenu_fmc)
+				if [ "$answer" = "Yes" ]; then
 
-         if [ "$answer" = "Yes" ]; then
+					# Check if there is more than one function
+					# that belongs to the same device.
+					bdf_count=$(echo "$list_pci" | cut -f1 -d\  |\
+						grep -c $(echo "$device_bdf" | sed 's/\..*//'))
 
-           # Check if there is more than one function
-           # that belongs to the same device.
-           bdf_count=$(echo "$list_pci" | awk '{print $1}' |\
-             grep -c $(echo "$device_bdf" | sed 's/\..*//'))
+					if [ "$bdf_count" -gt 1 ]; then
 
-           if [ "$bdf_count" -gt 1 ]; then
+						if [ -n "$pci_option" ]; then unset pci_option; fi
 
-             if [ -n "$pci_option" ]; then unset pci_option; fi
+							answer_nsrt=$(printf "No\nYes" | dmenu -i\
+								-p "\"$device_bdf\" is most likely to be attached with the option 'no-strict-reset' enabled. Please be aware of the security implications! Do you want to attach \"$device_bdf\" with the option 'no-strict-reset' set to true?")
 
-               answer_nsrt=$(printf "No\nYes" |\
-                 dmenu -i -p "\"$device_bdf\" is most likely to be attached with the option 'no-strict-reset' enabled. Please be aware of the security implications! Do you want to attach \"$device_bdf\" with the option 'no-strict-reset' set to true?"\
-                 $dmenu_fmc)
+						if [ "$answer_nsrt" = "Yes" ]; then
 
-             if [ "$answer_nsrt" = "Yes" ]; then
+							pci_option="-o no-strict-reset=True"
+						fi
+					fi
 
-               pci_option="-o no-strict-reset=True"
-             fi
-           fi
+					if ! qvm-pci attach --persistent $pci_option "$qube" "$device_src:$device_bdf"; then
 
-           if ! qvm-pci attach --persistent $pci_option "$target_qube" "$device_src:$device_bdf"; then
+						echo "Go back..." | dmenu\
+							-p "Error: Failed to attach \"$device_bdf\" to $qube!"\
+							> /dev/null 2>&1
+					fi
 
-             echo "Go back..." |\
-               dmenu -p "Error: Failed to attach \"$device_bdf\" to $target_qube!"\
-               $dmenu_fmc > /dev/null 2>&1
-           fi
-
-           list_pci=$(qvm-pci)
-         fi
-       fi
-     fi
-   done
- fi
+					list_pci=$(qvm-pci)
+				fi
+			fi
+		fi
+	done
+fi
 )
 
-fqvm_preferences() (
+fqvm_prefs() (
 
- property=0
+property=0
 
- while [ -n "$property" ]; do
+while [ -n "$property" ]; do
 
-   property=$(qvm-prefs "$target_qube" |\
-     dmenu -l 45 -p "$target_qube:" $dmenu_fmc |\
-     awk '{print $1}')
+	property=$(qvm-prefs "$qube" |\
+		dmenu -l 45 -p "$qube:" | cut -f1 -d\ )
 
-   if [ -n "$property" ]; then
+	if [ -n "$property" ]; then
 
-     case $property in
+		case $property in
 
-       autostart)
+			autostart)
 
-         value_selected=$(printf "False\nTrue" |\
-           dmenu -i -p "Set autostart of $target_qube to:" $dmenu_fmc);;
+				value_selected=$(printf "False\nTrue" |\
+					dmenu -i -p "Set autostart of $qube to:");;
 
-       debug)
+			debug)
 
-         value_selected=$(printf "False\nTrue" |\
-           dmenu -i -p "Set debug mode of $target_qube to:" $dmenu_fmc);;
+				value_selected=$(printf "False\nTrue" |\
+					dmenu -i -p "Set debug mode of $qube to:");;
 
-       default_dispvm)
+			default_dispvm)
 
-         if [ -n "$LIST_OF_DISPTEMP" ]; then unset LIST_OF_DISPTEMP; fi
+				get_list_of_disptemp
 
-         # [mediocre] Look up disposable templates.
-         for n in $(qvm-ls --raw-data -O NAME,FLAGS |\
-           grep '|a.......$' | cut -d '|' -f1); do
+				value_selected=$(printf "(Default)\n(None)$LIST_OF_DISPTEMP" |\
+					dmenu -l 50 -p "Select default dispvm for $qube:")
 
-           if qvm-prefs --get "$n" template_for_dispvms |\
-             grep True > /dev/null 2>&1; then
+				if [ "$value_selected" = "(None)" ]; then
 
-             LIST_OF_DISPTEMP="$LIST_OF_DISPTEMP\n$n"
-           fi
-         done
+					value_selected="None"
 
-         value_selected=$(printf "(Default)\n(None)$LIST_OF_DISPTEMP" |\
-           dmenu -l 50 -p "Select default dispvm for $target_qube" $dmenu_fmc)
+				elif [ "$value_selected" = "(Default)" ]; then
 
-         if [ "$value_selected" = "(None)" ]; then
+					value_selected="--default"
+				fi;;
 
-           value_selected="None"
+			default_user)
 
-         elif [ "$value_selected" = "(Default)" ]; then
+				value_selected=$(echo "--default" |\
+					dmenu -p "Enter the name of the default user for $qube:");;
 
-           value_selected="--default"
-         fi;;
+			include_in_backups)
 
-       default_user)
+				value_selected=$(printf "False\nTrue" |\
+					dmenu -i -p "Include $qube in backups?");;
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter the name of the default user for $target_qube"\
-           $dmenu_fmc);;
+			kernel)
 
-       include_in_backups)
+				if value_selected=$(echo "--default" |\
+					dmenu -p "Enter the kernel to be used by $qube:"); then
 
-         value_selected=$(printf "False\nTrue" |\
-           dmenu -i -p "Include $target_qube in backups?" $dmenu_fmc);;
+					answer_selected=$(printf "No\nYes" |\
+						dmenu -i -p "Set kernel of $qube to $value_selected?")
 
-       kernel)
+					if [ "$answer_selected" != "Yes" ]; then
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter kernel to be used by $target_qube" $dmenu_fmc)
+						unset value_selected
+					fi
+				fi;;
 
-         if [ -n "$value_selected" ]; then
+			kernelopts)
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set kernel of $target_qube to $value_selected?"\
-             $dmenu_fmc)
+				if value_selected=$(echo "--default" |\
+					dmenu -p "Enter the kernel options for $qube:"); then
 
-           if [ "$answer_selected" != "Yes" ]; then
+					answer_selected=$(printf "No\nYes" | dmenu -i\
+						-p "Set kernel options for $qube to \"$value_selected\"?")
 
-             unset value_selected
-           fi
-         fi;;
+					if [ "$answer_selected" != "Yes" ]; then
 
-       kernelopts)
+						unset value_selected
+					fi
+				fi;;
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter kernel options for $target_qube" $dmenu_fmc)
+			label)
 
-         if [ -n "$value_selected" ]; then
+				if qvm-check -q --running "$qube"; then
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set kernel options for $target_qube to \"$value_selected\"?"\
-             $dmenu_fmc)
+					echo "Go back..." | dmenu\
+						-p "$qube needs to be powered off, in order to change its label."\
+						> /dev/null 2>&1
+				else
 
-           if [ "$answer_selected" != "Yes" ]; then
+					value_selected=$(printf "Purple\nBlue\nGray\nGreen\nYellow\nOrange\nRed\nBlack" |\
+						dmenu -i -l 8 -p "Select label for $qube:" |\
+						awk '{print tolower($0)}')
+				fi;;
 
-             unset value_selected
-           fi
-         fi;;
+			mac)
 
-       label)
+				if value_selected=$(echo "--default" |\
+					dmenu -p "Enter the MAC address for $qube:"); then
 
-         if qvm-check --running "$target_qube" > /dev/null 2>&1; then
+					answer_selected=$(printf "No\nYes" |\
+						dmenu -i -p "Set MAC address of $qube to $value_selected?")
 
-           echo "Go back..." |\
-             dmenu -p "$target_qube needs to be powered off, in order to change its label"\
-             $dmenu_fmc > /dev/null 2>&1
-         else
+					if [ "$answer_selected" != "Yes" ]; then
 
-           value_selected=$(printf "Purple\nBlue\nGray\nGreen\nYellow\nOrange\nRed\nBlack" |\
-             dmenu -i -l 8 -p "Select label for $target_qube" $dmenu_fmc |\
-             awk '{print tolower($0)}')
-         fi;;
+						unset value_selected
+					fi
+				fi;;
 
-       mac)
+			maxmem)
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter new MAC address for $target_qube" $dmenu_fmc)
+				if value_selected=$(echo "--default" |\
+					dmenu -p "Enter the maximum amount of memory in MB to be allocated to $qube. Setting it to 0 will disable dynamic memory balancing.")
 
-         if [ -n "$value_selected" ]; then
+				then answer_selected=$(printf "No\nYes" | dmenu -i\
+						-p "Set maximum memory of $qube to $value_selected MB?")
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set MAC address of $target_qube to $value_selected?"\
-             $dmenu_fmc)
+					if [ "$answer_selected" != "Yes" ]; then
 
-           if [ "$answer_selected" != "Yes" ]; then
+						unset value_selected
+					fi
+				fi;;
 
-             unset value_selected 
-           fi
-         fi;;
+			memory)
 
-       maxmem)
+				if value_selected=$(echo "--default" | dmenu\
+					-p "Enter the amount of initial memory in MB to be allocated to $qube:")
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter the maximum amount of memory in MB to be allocated to $target_qube. Setting it to 0 will disable dynamic memory balancing."\
-           $dmenu_fmc)
+				then answer_selected=$(printf "No\nYes" | dmenu -i\
+						-p "Set initial memory of $qube to $value_selected MB?")
 
-         if [ -n "$value_selected" ]; then
+					if [ "$answer_selected" != "Yes" ]; then
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set maximum memory of $target_qube to $value_selected MB?"\
-             $dmenu_fmc)
+						unset value_selected
+					fi
+				fi;;
 
-           if [ "$answer_selected" != "Yes" ]; then
+			netvm)
 
-             unset value_selected
-           fi
-         fi;;
+				# List netvms via 'qvm-ls'.
+				value_selected=$(printf "(Default)\n(None)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+					grep '|...N....$' | cut -d '|' -f1)" |\
+					dmenu -l 50 -p "Select netvm for $qube:")
 
-       memory)
+				if [ "$value_selected" = "(None)" ]; then
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter the amount of initial memory in MB to be allocated to $target_qube"\
-           $dmenu_fmc)
+					value_selected="None"
 
-         if [ -n "$value_selected" ]; then
+				elif [ "$value_selected" = "(Default)" ]; then
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set initial memory of $target_qube to $value_selected MB?" $dmenu_fmc)
+					value_selected="--default"
+				fi;;
 
-           if [ "$answer_selected" != "Yes" ]; then
+			provides_network)
 
-             unset answer_selected
-           fi
-         fi;;
+				value_selected=$(printf "False\nTrue" | dmenu -i\
+					-p "Should $qube provide networking to other qubes?");;
 
-       netvm)
+			qrexec_timeout)
 
-         # List netvms via 'qvm-ls'.
-         value_selected=$(printf "(Default)\n(None)\n$(qvm-ls --raw-data --fields NAME,FLAGS |\
-           grep '|...N....$' | cut -d '|' -f1)" |\
-           dmenu -l 50 -p "Select netvm for $target_qube" $dmenu_fmc)
+				if value_selected=$(echo "--default" | dmenu\
+					-p "Enter the time in seconds, after which qrexec attempt is deemed a failure for $qube:")
 
-         if [ "$value_selected" = "(None)" ]; then
+				then answer_selected=$(printf "No\nYes" | dmenu -i\
+					-p "Set qrexec timeout for $qube to $value_selected seconds?")
 
-           value_selected="None"
+					if [ "$answer_selected" != "Yes" ]; then
 
-         elif [ "$value_selected" = "(Default)" ]; then
+						unset value_selected
+					fi
+				fi;;
 
-           value_selected="--default"
-         fi;;
+			shutdown_timeout)
 
-       provides_network)
+				if value_selected=$(echo "--default" | dmenu\
+					-p "Enter the time in seconds for shutdown, after which $qube may be forcefully powered off:")
 
-         value_selected=$(printf "False\nTrue" |\
-           dmenu -i -p "Should $target_qube provide networking for other qubes?"\
-           $dmenu_fmc);;
+				then answer_selected=$(printf "No\nYes" | dmenu -i\
+						-p "Set shutdown timeout for $qube to $value_selected seconds?")
 
-       qrexec_timeout)
+					if [ "$answer_selected" != "Yes" ]; then
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter the time in seconds, after which qrexec attempt is deemed a failure for $target_qube"\
-           $dmenu_fmc)
+						unset value_selected
+					fi
+				fi;;
 
-         if [ -n "$value_selected" ]; then
+			template)
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set qrexec timeout for $target_qube to $value_selected seconds?"\
-             $dmenu_fmc)
+				if qvm-check -q --running "$qube"; then
 
-           if [ "$answer_selected" != "Yes" ]; then
+					echo "Go back..." | dmenu\
+						-p "$qube needs to be powered off, in order to change its template."\
+						> /dev/null 2>&1
+				else
 
-             unset value_selected
-           fi
-         fi;;
+					# List templatevms via 'qvm-ls'.
+					value_selected=$(printf "(Default)\n$(qvm-ls --raw-data -O NAME,FLAGS |\
+						grep '|t.......$' | cut -d '|' -f1)" |\
+						dmenu -l 50 -p "Select template for $qube:")
 
-       shutdown_timeout)
+					if [ "$value_selected" = "(Default)" ]; then
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter the time in seconds for shutdown, after which $target_qube may be forcefully powered off"\
-           $dmenu_fmc)
+						value_selected="--default"
+					fi
+				fi;;
 
-         if [ -n "$value_selected" ]; then
+			template_for_dispvms)
 
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set shutdown timeout for $target_qube to $value_selected seconds?"\
-             $dmenu_fmc)
+				value_selected=$(printf "False\nTrue" | dmenu -i\
+					-p "Should $qube be used as a template for disposable qubes?");;
 
-           if [ "$answer_selected" != "Yes" ]; then
+			vcpus)
 
-             unset value_selected
-           fi
-         fi;;
+				if value_selected=$(echo "--default" | dmenu\
+					-p "Enter the number of CPU cores that should be made available to $qube:")
 
-       template)
+				then answer_selected=$(printf "No\nYes" | dmenu -i\
+						-p "Set number of CPU cores available to $qube to $value_selected?")
 
-         if qvm-check --running "$target_qube" > /dev/null 2>&1; then
+					if [ "$answer_selected" != "Yes" ]; then
 
-           echo "Go back..." |\
-             dmenu -p "$target_qube needs to be powered off, in order to change its template"\
-             $dmenu_fmc > /dev/null 2>&1
-         else
+						unset value_selected
+					fi
+				fi;;
 
-           # List templatevm's via 'qvm-ls'.
-           value_selected=$(printf "(Default)\n$(qvm-ls --raw-data --fields NAME,FLAGS |\
-             grep '|t.......$' | cut -d '|' -f1)" |\
-             dmenu -l 50 -p "Select template for $target_qube" $dmenu_fmc)
+			virt_mode)
 
-           if [ "$value_selected" = "(Default)" ]; then
+				value_selected=$(printf "PVH\nHVM\nPV" |\
+					dmenu -i -l 3 -p "Select virtualisation mode for $qube:");;
 
-             value_selected="--default"
-           fi
-         fi;;
+			*)
+		esac
 
-       template_for_dispvms)
+		if [ -n "$value_selected" ]; then
 
-         value_selected=$(printf "False\nTrue" |\
-           dmenu -i -p "Should $target_qube be used as a template for disposable qubes?"\
-           $dmenu_fmc);;
+			if ! qvm-prefs "$qube" "$property" "$value_selected"; then
 
-       vcpus)
+				echo "Go back..." |\
+					dmenu -p "Error: Could not set $property to '$value_selected'!"\
+					> /dev/null 2>&1
+			fi
 
-         value_selected=$(echo "--default" |\
-           dmenu -p "Enter the number of CPU cores that should be made available to $target_qube"\
-           $dmenu_fmc)
-
-         if [ -n "$value_selected" ]; then
-
-           answer_selected=$(printf "No\nYes" |\
-             dmenu -i -p "Set number of CPU cores available to $target_qube to $value_selected?"\
-             $dmenu_fmc)
-
-           if [ "$answer_selected" != "Yes" ]; then
-
-             unset value_selected
-           fi
-         fi;;
-
-       virt_mode)
-
-         value_selected=$(printf "PVH\nHVM\nPV" |\
-           dmenu -i -l 3 -p "Select virtualisation mode for $target_qube"\
-           $dmenu_fmc);;
-
-       *)
-     esac
-
-     if [ -n "$value_selected" ]; then
-
-       if ! qvm-prefs --set "$target_qube" "$property" "$value_selected"; then
-
-         echo "Go back..." |\
-           dmenu -p "Error: Could not set $property to '$value_selected'!"\
-           $dmenu_fmc > /dev/null 2>&1
-       fi
-
-       unset value_selected
-     fi
-   fi
- done
+			unset value_selected
+		fi
+	fi
+done
 )
 
 fqvm_remove() {
 
- if qvm-check --running "$target_qube" > /dev/null 2>&1; then
+if qvm-check -q --running "$qube"; then
 
-   echo "Go back..." |\
-     dmenu -p "$target_qube needs to be powered off, in order to be removed"\
-     $dmenu_fmc > /dev/null 2>&1
- else
+	echo "Go back..." |\
+		dmenu -p "$qube needs to be powered off, in order to be removed."\
+		> /dev/null 2>&1
+else
 
-   confirmation=$(true |\
-     dmenu -p "Enter the name of the qube '$target_qube' in order to remove it"\
-     $dmenu_fmc)
+	confirmation=$(: |\
+		dmenu -p "Enter the name of the qube '$qube' in order to remove it:")
 
-   if [ "$target_qube" = "$confirmation" ]; then
+	if [ "$qube" = "$confirmation" ]; then
 
-     confirmation_semifinal=$(printf "No\nYes" |\
-       dmenu -i -p "Are you sure you want to remove $target_qube permanently?"\
-       $dmenu_fmc)
+		confirmation_semifinal=$(printf "No\nYes" |\
+			dmenu -i -p "Are you sure you want to remove '$qube' permanently?")
 
-     if [ "$confirmation_semifinal" = "Yes" ]; then
+		if [ "$confirmation_semifinal" = "Yes" ]; then
 
-       confirmation_final=$(printf "No\nYes" |
-         dmenu -i -p "Are you really sure you want to remove $target_qube permanently?"\
-         $dmenu_fmc)
+			confirmation_final=$(printf "No\nYes" | dmenu -i\
+				-p "Are you really sure you want to remove '$qube' permanently?")
 
-       if [ "$confirmation_final" = "Yes" ]; then
+			if [ "$confirmation_final" = "Yes" ]; then
 
-         qvm-remove -f "$target_qube"&
+				qvm-remove -f "$qube"&
 
-         unset chosefrom
-       fi
-     fi
-   fi
- fi
+				unset chosefrom
+			fi
+		fi
+	fi
+fi
 }
 
 fqvm_run() (
 
- commandtr=$(true |\
-   dmenu -p "Run command in $target_qube:" $dmenu_fmc)
+if user=$(printf "Default user\nRoot" | dmenu -i -l 2 -p "Run commands as:"); then
 
- if [ -n "$commandtr" ]; then qvm-run "$target_qube" "$commandtr"& fi
+	if [ "$user" = "Root" ]; then
+
+		as_root="-u root"
+		user='#'
+	else
+
+		user='$'
+	fi
+
+	commandtr=0
+
+	while [ -n "$commandtr" ]; do
+
+		if commandtr=$(: | dmenu -p "($user)Run command in $qube:"); then
+
+			qvm-run -q $as_root "$qube" "$commandtr"& fi
+	done
+fi
 )
 
 fqvm_service() (
 
- service=0
+services=0
 
- while [ -n "$service" ]; do
+while [ -n "$services" ]; do
 
-   service=$(qvm-service "$target_qube" --list |\
-     dmenu -l 32 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
+	services=$(qvm-service "$qube" --list |\
+		dmenu -l 32 -p "$qube:" | cut -f1 -d\ )
 
-   if [ -n "$service" ]; then
+	if [ -n "$services" ]; then
 
-     # If the service has already been added to the list,
-     # give option to unset it.
-     if qvm-service "$target_qube" --list | grep -w "$service"; then
+		for service in $services; do
 
-        unset="\nUnset"
-     fi
+			# If the service has already been added to the list,
+			# give option to unset it.
+			if qvm-service "$qube" --list | grep -q "^$service "; then
 
-     value=$(printf "Disable\nEnable$unset" |\
-       dmenu -l 3 -i -p "Select value for '$service'" $dmenu_fmc)
+				 unset="\nUnset"
+			fi
 
-     if [ "$value" = "Disable" ]; then
+			value=$(printf "Disable\nEnable$unset" |\
+				dmenu -l 3 -i -p "Select value for '$service':")
 
-       if ! qvm-service "$target_qube" "$service" off; then
+			if [ "$value" = "Disable" ]; then
 
-         echo "Go back..." | dmenu -p "Error: Could not deactivate $service!"\
-           $dmenu_fmc > /dev/null 2>&1
-       fi
+				if ! qvm-service "$qube" "$service" off; then
 
-     elif [ "$value" = "Enable" ]; then
+					echo "Go back..." | dmenu -p "Error: Could not deactivate '$service'!"\
+						> /dev/null 2>&1
+				fi
 
-       if ! qvm-service "$target_qube" "$service" on; then
+			elif [ "$value" = "Enable" ]; then
 
-         echo "Go back..." | dmenu -p "Error: Could not activate $service!"\
-           $dmenu_fmc > /dev/null 2>&1
-       fi
+				if ! qvm-service "$qube" "$service" on; then
 
-     elif [ "$value" = "Unset" ]; then
+					echo "Go back..." | dmenu -p "Error: Could not activate '$service'!"\
+						> /dev/null 2>&1
+				fi
 
-       if ! qvm-service "$target_qube" "$service" --unset; then
+			elif [ "$value" = "Unset" ]; then
 
-         echo "Go back..." | dmenu -p "Error: Could not unset $service!"\
-           $dmenu_fmc > /dev/null 2>&1
-       fi
-     fi
+				if ! qvm-service "$qube" "$service" --unset; then
 
-     if [ -n "$unset" ]; then unset unset; fi
-   fi
- done
+					echo "Go back..." | dmenu -p "Error: Could not unset '$service'!"\
+						> /dev/null 2>&1
+				fi
+			fi
+
+			if [ -n "$unset" ]; then unset unset; fi
+		done
+	fi
+done
 )
 
 fqvm_tags() (
 
- tag=0
+tags=0
 
- while [ -n "$tag" ]; do
+while [ -n "$tags" ]; do
 
-   tag=$(qvm-tags "$target_qube" list |\
-     dmenu -l 15 -p "$target_qube:" $dmenu_fmc | awk '{print $1}')
+	tags=$(qvm-tags "$qube" list |\
+		dmenu -l 15 -p "$qube:" | cut -f1 -d\ )
 
-   if [ -n "$tag" ]; then
+	if [ -n "$tags" ]; then
 
-     if qvm-tags "$target_qube" list | grep -w "$tag"; then
+		for tag in $tags; do
 
-       answer=$(printf "No\nYes" |\
-         dmenu -i -p "Remove tag '$tag' from $target_qube?" $dmenu_fmc)
+			if qvm-tags "$qube" list | grep -q "^$tag$"; then
 
-       if [ "$answer" = "Yes" ]; then
+				answer=$(printf "No\nYes" |\
+					dmenu -i -p "Remove tag '$tag' from $qube?")
 
-         qvm-tags "$target_qube" del "$tag"
-       fi
-     else
+				if [ "$answer" = "Yes" ]; then
 
-       qvm-tags "$target_qube" add "$tag"
-     fi
-   fi
- done
+					qvm-tags "$qube" del "$tag"
+				fi
+			else
+
+				qvm-tags "$qube" add "$tag"
+			fi
+		done
+	fi
+done
 )
 
-get_qube_label() {
+fqvm_volume() (
 
- qube_label=$(qvm-ls --raw-data "$target_qube" -O LABEL)
+qube_class=$(qvm-ls --raw-data -O flags "$qube" | cut -c 1)
 
- # Change label colors according to ~/.config/qmenu.conf if that file exists.
- if [ -f "$HOME/.config/qmenu.conf" ]; then
+# If $qube is template or standalone, give option to extend root storage.
+if [ "$qube_class" = "t" ] ||\
+	 [ "$qube_class" = "s" ] ||\
+	 [ "$qube_class" = "S" ]; then
 
-   qube_label=$(grep "^$qube_label=" "$HOME"/.config/qmenu.conf | cut -d= -f2)
- fi
+	volume=$(printf "Root\nPrivate" |\
+		dmenu -l 2 -i -p "$qube:" | awk '{print tolower($0)}')
+else
 
- # Note that the '-m 0' option in 'dmenu' is important
- # for security, as it restricts it to monitor 0.
- dmenu_fmc="-f -m 0 -nb $theme_0 -nf $theme_1 -sb $qube_label -sf $theme_1"
-}
+	volume="private"
+fi
 
-rearrange_qube_list() {
+if [ -n "$volume" ]; then
 
- qube_list=$(echo "$qube_list" |\
-   awk -v ListInOrder="LABEL,purple,blue,gray,green,yellow,orange,red,black" '
-   BEGIN {
-   split(ListInOrder, a, ",")
-   for (i = 1; i <= length(a); ++i) ListToOrdinal[a[i]] = i
-   }
-   {print ListToOrdinal[$3] "-" $0}
-   ' | sort -t- -k1,1n | cut -d- -f2-)
+	current_storage=$(( $(qvm-volume info "$qube:$volume" size) / 1048576 ))
+
+	if mebibyte=$(echo "$current_storage" | dmenu\
+		-p "Enter the maximum size of $volume storage in MiB to be allocated to $qube:"); then
+
+		if [ "$mebibyte" -gt "$current_storage" ]; then
+
+			byte=$(( mebibyte * 1048576 ))
+
+			answer=$(printf "No\nYes" | dmenu -i\
+				-p "Increase the maximum $volume storage size of $qube from $current_storage MiB to $mebibyte MiB?")
+
+			if [ "$answer" = "Yes" ]; then
+
+				qvm-volume extend "$qube:$volume" "$byte"&
+			fi
+		else
+
+			echo "Go back..." | dmenu -p "Error: Can not decrease the maximum $volume storage!"\
+				> /dev/null 2>&1
+		fi
+	fi
+fi
+)
+
+get_list_of_disptemp() {
+
+if [ -z "$LIST_OF_DISPTEMP" ]; then
+
+	# [mediocre] Look up disposable templates in a very slow way...
+	for n in $(qvm-ls --raw-data -O NAME,FLAGS |\
+		grep '|a.......$' | cut -d '|' -f1); do
+
+		if qvm-prefs "$n" template_for_dispvms | grep -q True; then
+
+			LIST_OF_DISPTEMP="$LIST_OF_DISPTEMP\n$n"
+		fi
+	done
+fi
 }
 
 
@@ -1444,80 +1312,87 @@ rearrange_qube_list() {
 
 if [ "$2" = "--light-theme" ]; then
 
-  theme_0='#ffffff'
-  theme_1='#000000'
+	theme_0='#ffffff'
+	theme_1='#000000'
 else
 
-  theme_0='#000000'
-  theme_1='#ffffff'
+	theme_0='#000000'
+	theme_1='#ffffff'
 fi
+
+qube_label=$theme_1
 
 case $1 in
 
-  --all)
+	--focused)
 
-    # As of 20190823, 'qvm-ls --all' will not list dom0 because of a bug.
-    # As a workaround, we will 'shift' $1 and, if needed, $2.
-    shift
-    if [ -n "$1" ]; then shift; fi;;
+		qube=$(xprop -id "$(xdotool getwindowfocus)" _QUBES_VMNAME | cut -d\" -f2)
 
-  --focused)
+		if [ "$qube" = "_QUBES_VMNAME:  not found." ]; then
 
-    target_qube=$(xprop -id "$(xdotool getwindowfocus)" |\
-      grep -w '^_QUBES_VMNAME(STRING)' | cut -d\" -f2)
+			qube=dom0
 
-    if [ -z "$target_qube" ]; then
+			fmenu_dom0
+		else
 
-      target_qube=dom0
+			fmenu_domu "$@"
+		fi
 
-      fmenu_fqubes
-    else
+		exit 1;;
 
-      fmenu_fqvm
-    fi
+	--qube=*)
 
-    exit 1;;
+		qube=$(echo "$1" | cut -d= -f2)
 
-  --halted|--paused|--running|--tags=*);;
+		if [ "$qube" = "dom0" ]; then
 
-  *)
+			fmenu_dom0
+		else
 
-    printf "qmenu-vm [OPTION] (--light-theme)\nList, manage and configure your qubes.\n\n --all\n --focused\n --halted\n --paused\n --running\n --tags=[TAG]\n\n\nqmenu v1.3\n<https://github.com/sine3o14nnae/qmenu/>\n<https://gitlab.com/sine3o14nnae/qmenu/>\n\n"
+			fmenu_domu "$@"
+		fi
 
-    if [ "$1" = "--help" ]; then exit 0; else exit 2; fi
+		exit 1;;
+
+	--all|--halted|--paused|--running|--tags=*);;
+
+	*)
+
+		printf "Usage: $0 [OPTION] (--light-theme) (--{LABEL}=#{HEX TRIPLET})...\nList, manage and configure your qubes via dmenu.\n\n --all\n --focused\n --halted\n --paused\n --running\n --qube=[QUBE]\n --tags=[TAG]\n\n"
+
+		if [ "$1" = "--help" ]; then exit 0; fi; exit 2
 esac
 
-while true; do
+while :; do
 
-  # Load 'qvm-ls' into a variable so that it doesnt
-  # need to reload again after every user operation.
-  qube_list=$(qvm-ls --no-spinner $1 -O NAME,STATE,LABEL,CLASS\
-,TEMPLATE,NETVM,IP,PRIV-MAX,PRIV-CURR,PRIV-USED,ROOT-MAX\
-,ROOT-CURR,ROOT-USED,KERNEL,KERNELOPTS)
+	# Load 'qvm-ls' into a variable so that it doesnt
+	# need to reload again after every user operation.
+	# Sort qubes after qube label via sed and sort.
+	qube_list=$(qvm-ls --no-spinner "$1" -O NAME,STATE,LABEL,MEMORY,MAXMEM,CLASS,TEMPLATE,NETVM,DEFAULT_DISPVM,IP,PRIV-MAX,PRIV-CURR,PRIV-USED,ROOT-MAX,ROOT-CURR,ROOT-USED,KERNEL |\
+		sed 's/ LABEL/ 0\@ /g; s/ red/ 1\@ /g; s/ orange/ 2\@ /g; s/ yellow/ 3\@ /g; s/ green/ 4\@ /g; s/ gray/ 5\@ /g; s/ blue/ 6\@ /g; s/ purple/ 7\@ /g; s/ black/ 8\@ /g' |\
+		sort -k3,3 |\
+		sed 's/ 0\@ / LABEL/g; s/ 1\@ / red/g; s/ 2\@ / orange/g; s/ 3\@ / yellow/g; s/ 4\@ / green/g; s/ 5\@ / gray/g; s/ 6\@ / blue/g; s/ 7\@ / purple/g; s/ 8\@ / black/g')
 
-  rearrange_qube_list
+	# Get out of the while loop and refresh 'qvm-ls' by loading it again
+	# into $qube_list, whenever the user selects the 'qvm-ls' top row.
+	while [ "$qubes" != "NAME" ]; do
 
-  if [ -n "$target_qube" ]; then unset target_qube; fi
+		qubes=$(echo "$qube_list" | dmenu -l 69 | cut -f1 -d\ )
 
-  # Get out of the while loop and refresh 'qvm-ls' by loading it again
-  # into $qube_list, whenever the user selects the 'qvm-ls' top row.
-  while [ "$target_qube" != "NAME" ]; do
+		if [ -z "$qubes" ]; then exit 1; fi
 
-    target_qube=$(echo "$qube_list" | dmenu -f -m 0 -l 69 \
-      -nb $theme_0 -nf $theme_1 -sb $theme_1 -sf $theme_0 |\
-      awk '{print $1}')
+		for qube in $qubes; do
 
-    if [ -z "$target_qube" ]; then exit 1
+			if [ "$qube" = "dom0" ]; then
 
-    elif [ "$target_qube" != "NAME" ]; then
+				fmenu_dom0
 
-      if [ "$target_qube" = "dom0" ]; then
+			elif [ "$qube" != "NAME" ]; then
 
-        fmenu_fqubes
-      else
+				fmenu_domu "$@"
+			fi
+		done
+	done
 
-        fmenu_fqvm
-      fi
-    fi
-  done
+	unset qubes
 done
